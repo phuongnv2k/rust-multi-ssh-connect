@@ -924,8 +924,16 @@ fn main() -> wry::Result<()> {
     let event_loop = EventLoopBuilder::<AppEvent>::with_user_event().build();
     let proxy = event_loop.create_proxy();
 
+    let window_icon = tao::window::Icon::from_rgba(
+        include_bytes!("../assets/app_icon_64.rgba").to_vec(),
+        64,
+        64,
+    )
+    .ok();
+
     let window = WindowBuilder::new()
         .with_title("Multi-SSH Connect")
+        .with_window_icon(window_icon)
         .with_inner_size(tao::dpi::LogicalSize::new(1180.0, 760.0))
         .with_min_inner_size(tao::dpi::LogicalSize::new(880.0, 560.0))
         .build(&event_loop)

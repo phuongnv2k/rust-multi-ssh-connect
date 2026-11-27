@@ -213,6 +213,21 @@
       border-color: var(--primary);
       box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
     }
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    .pf-field {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .pf-field span {
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
     .search-input { padding-left: 32px; }
 
     .profile-list {
@@ -316,6 +331,49 @@
       display: inline-flex;
       align-items: center;
       gap: 3px;
+    }
+
+    /* Toggle Switch */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 36px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background-color: var(--border-strong);
+      border-radius: 999px;
+      transition: background-color 0.18s ease;
+    }
+    .slider::before {
+      content: "";
+      position: absolute;
+      height: 14px;
+      width: 14px;
+      left: 3px;
+      bottom: 3px;
+      background-color: #ffffff;
+      border-radius: 50%;
+      transition: transform 0.18s ease;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    }
+    .switch input:checked + .slider {
+      background-color: var(--ok);
+    }
+    .switch input:checked + .slider::before {
+      transform: translateX(16px);
+    }
+    .switch.connecting input:checked + .slider {
+      background-color: var(--warn);
     }
 
     /* Workspace */
@@ -1002,31 +1060,25 @@
           else if (sess.status.startsWith("Error")) { dotCls = "err"; statusTxt = "Lỗi"; }
         }
 
+        const isConnecting = sess && sess.status === "Connecting";
+
         return `
-          <div class="profile-card ${isSelected ? "selected" : ""}" onclick="send({type:'select_profile', id:'${p.id}'})">
-            <div class="profile-card-top">
-              <div class="avatar" style="background:${rgbaStr(p.color, 0.14)}; color:${hex}; border:1px solid ${rgbaStr(p.color, 0.45)};">
-                ${esc(monogram(p.name))}
-              </div>
+          <div class="profile-card ${isSelected ? "selected" : ""}" style="border-left: 3px solid ${hex};" onclick="send({type:'select_profile', id:'${p.id}'})">
+            <div class="profile-card-top" style="justify-content:space-between;">
               <div class="profile-meta">
                 <div class="profile-title-row">
+                  <span class="dot ${dotCls}" title="${statusTxt}"></span>
                   <span class="env-badge" style="background:${rgbaStr(p.color, 0.14)}; color:${hex};">${esc(p.env_badge || "SSH")}</span>
                   <span class="profile-name">${esc(p.name)}</span>
+                  ${ov.length ? `<span class="overlap-tag" title="${esc(ov.map(o => o.desc).join('\n'))}">⚠</span>` : ""}
                 </div>
-                <div class="profile-endpoint mono">${esc(p.username)}@${esc(p.host)}:${p.port}</div>
-              </div>
-            </div>
-            <div class="profile-card-bottom">
-              <div style="display:flex; align-items:center; gap:8px;">
-                <span class="status-dot"><span class="dot ${dotCls}"></span>${statusTxt}</span>
-                ${fwCount > 0 ? `<span>· ${fwCount} port</span>` : ""}
-                ${ov.length ? `<span class="overlap-tag" title="${esc(ov.map(o => o.desc).join('\n'))}">⚠ Trùng port</span>` : ""}
+                <div class="profile-endpoint mono">${esc(p.username)}@${esc(p.host)}:${p.port}${fwCount > 0 ? ` · ${fwCount}p` : ""}</div>
               </div>
               <div onclick="event.stopPropagation()">
-                ${isRunning
-                  ? `<button class="btn btn-sm btn-danger" onclick="send({type:'disconnect', id:'${p.id}'})">Ngắt</button>`
-                  : `<button class="btn btn-sm btn-ok" onclick="send({type:'connect', id:'${p.id}'})">Bật Live</button>`
-                }
+                <label class="switch ${isConnecting ? "connecting" : ""}" title="${isRunning ? "Tắt Live Profile" : "Bật Live Profile"}">
+                  <input type="checkbox" ${isRunning ? "checked" : ""} onchange="send({type: this.checked ? 'connect' : 'disconnect', id:'${p.id}'})" />
+                  <span class="slider"></span>
+                </label>
               </div>
             </div>
           </div>
@@ -1189,16 +1241,31 @@
           html += `</tbody></table>`;
         }
         html += `
-          <div class="quick-add">
-            <input class="input" id="qLabel" placeholder="Nhãn (MySQL)" style="width:120px;" />
-            <input class="input mono" id="qBind" value="127.0.0.1" style="width:105px;" />
-            <span>:</span>
-            <input class="input mono" id="qLPort" type="number" placeholder="Local" style="width:82px;" />
-            <span>→</span>
-            <input class="input mono" id="qRHost" value="127.0.0.1" style="width:110px;" />
-            <span>:</span>
-            <input class="input mono" id="qRPort" type="number" placeholder="Remote" style="width:82px;" />
-            <button class="btn btn-primary" onclick="addQuickForward('${profile.id}')">+ Bật nhanh</button>
+          <div class="quick-add" style="align-items:flex-end;">
+            <div class="pf-field">
+              <span>Tên gợi nhớ</span>
+              <input class="input" id="qLabel" placeholder="vd: MySQL" style="width:115px;" />
+            </div>
+            <div class="pf-field">
+              <span>IP máy bạn</span>
+              <input class="input mono" id="qBind" value="127.0.0.1" style="width:105px;" />
+            </div>
+            <span style="padding-bottom:8px; color:var(--text-muted);">:</span>
+            <div class="pf-field">
+              <span>Port máy bạn</span>
+              <input class="input mono" id="qLPort" type="number" placeholder="3307" style="width:82px;" />
+            </div>
+            <span style="padding-bottom:8px; color:var(--text-muted);">→</span>
+            <div class="pf-field">
+              <span>IP trên server</span>
+              <input class="input mono" id="qRHost" value="127.0.0.1" style="width:110px;" />
+            </div>
+            <span style="padding-bottom:8px; color:var(--text-muted);">:</span>
+            <div class="pf-field">
+              <span>Port trên server</span>
+              <input class="input mono" id="qRPort" type="number" placeholder="3306" style="width:86px;" />
+            </div>
+            <button class="btn btn-primary" style="height:34px;" onclick="addQuickForward('${profile.id}')">+ Bật ngay</button>
           </div>
         `;
       } else {
@@ -1302,17 +1369,27 @@
         el.innerHTML = `<div style="font-size:12px; color:var(--text-muted);">Chưa có rule nào</div>`;
         return;
       }
-      el.innerHTML = EDITOR_STATE.port_forwards.map((r, i) => `
+      el.innerHTML = `
+        <div style="display:flex; gap:6px; padding:0 8px; font-size:10.5px; font-weight:600; color:var(--text-muted);">
+          <span style="width:16px;"></span>
+          <span style="width:88px;">Tên gợi nhớ</span>
+          <span style="width:94px;">IP máy bạn</span>
+          <span style="width:72px;">Port máy bạn</span>
+          <span style="width:14px;"></span>
+          <span style="width:98px;">IP trên server</span>
+          <span style="width:74px;">Port server</span>
+        </div>
+      ` + EDITOR_STATE.port_forwards.map((r, i) => `
         <div class="rule-row">
           <input type="checkbox" ${r.enabled ? "checked" : ""} onchange="EDITOR_STATE.port_forwards[${i}].enabled=this.checked" />
-          <input class="input" style="width:90px; height:28px;" value="${esc(r.label)}" placeholder="Nhãn" oninput="EDITOR_STATE.port_forwards[${i}].label=this.value" />
+          <input class="input" style="width:88px; height:28px;" value="${esc(r.label)}" placeholder="MySQL" oninput="EDITOR_STATE.port_forwards[${i}].label=this.value" />
           <input class="input mono" style="width:90px; height:28px;" value="${esc(r.bind_address)}" placeholder="127.0.0.1" oninput="EDITOR_STATE.port_forwards[${i}].bind_address=this.value" />
           <span>:</span>
-          <input class="input mono" type="number" style="width:68px; height:28px;" value="${r.local_port}" oninput="EDITOR_STATE.port_forwards[${i}].local_port=parseInt(this.value)||0" />
+          <input class="input mono" type="number" style="width:66px; height:28px;" value="${r.local_port}" placeholder="3307" oninput="EDITOR_STATE.port_forwards[${i}].local_port=parseInt(this.value)||0" />
           <span>→</span>
-          <input class="input mono" style="width:95px; height:28px;" value="${esc(r.remote_host)}" placeholder="127.0.0.1" oninput="EDITOR_STATE.port_forwards[${i}].remote_host=this.value" />
+          <input class="input mono" style="width:94px; height:28px;" value="${esc(r.remote_host)}" placeholder="127.0.0.1" oninput="EDITOR_STATE.port_forwards[${i}].remote_host=this.value" />
           <span>:</span>
-          <input class="input mono" type="number" style="width:68px; height:28px;" value="${r.remote_port}" oninput="EDITOR_STATE.port_forwards[${i}].remote_port=parseInt(this.value)||0" />
+          <input class="input mono" type="number" style="width:66px; height:28px;" value="${r.remote_port}" placeholder="3306" oninput="EDITOR_STATE.port_forwards[${i}].remote_port=parseInt(this.value)||0" />
           <button class="btn btn-sm btn-danger" onclick="EDITOR_STATE.port_forwards.splice(${i},1); renderEditorRules();">✕</button>
         </div>
       `).join("");
