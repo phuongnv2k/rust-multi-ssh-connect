@@ -631,6 +631,9 @@
       <button class="btn" id="dlToolsTopBtn" style="display:none; border-color:var(--warn); color:var(--warn);" onclick="send({type:'download_tools'})">
         Tải Alacritty + WinSCP
       </button>
+      <button class="btn" onclick="openBackupModal()">
+        Nhập / Xuất Data
+      </button>
       <button class="btn" onclick="openSettings()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
         Cài đặt
@@ -774,6 +777,48 @@
     </div>
   </div>
 
+  <!-- Backup / Import-Export Modal -->
+  <div class="modal-backdrop" id="backupModal">
+    <div class="modal" style="max-width:500px;">
+      <div class="modal-head">
+        <span>Nhập / Xuất dữ liệu (Mã hoá mật khẩu)</span>
+        <button class="btn btn-ghost btn-sm" onclick="closeModal('backupModal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label>Xuất dữ liệu (Export toàn bộ Profile & Cài đặt ra file .mssh)</label>
+          <div class="form-grid" style="margin-top:4px;">
+            <input class="input" id="expPass" type="password" placeholder="Nhập mật khẩu bảo vệ..." />
+            <input class="input" id="expPass2" type="password" placeholder="Xác nhận mật khẩu..." />
+          </div>
+          <div style="margin-top:8px;">
+            <button class="btn btn-primary" onclick="doExport()">Chọn nơi lưu & Xuất file</button>
+          </div>
+        </div>
+        <div style="height:1px; background:var(--border); margin:4px 0;"></div>
+        <div class="field">
+          <label>Nhập dữ liệu (Import từ file .mssh đã mã hoá)</label>
+          <input class="input" id="impPass" type="password" placeholder="Nhập mật khẩu giải mã..." style="margin-top:4px;" />
+          <div style="display:flex; gap:14px; align-items:center; margin-top:8px;">
+            <label style="display:flex; align-items:center; gap:5px; font-weight:500; color:var(--text);">
+              <input type="radio" name="impMode" value="merge" checked /> Gộp thêm (Merge)
+            </label>
+            <label style="display:flex; align-items:center; gap:5px; font-weight:500; color:var(--text);">
+              <input type="radio" name="impMode" value="replace" /> Thay thế toàn bộ (Replace)
+            </label>
+          </div>
+          <div style="margin-top:8px;">
+            <button class="btn btn-ok" onclick="doImport()">Chọn file & Nhập dữ liệu</button>
+          </div>
+        </div>
+        <div id="backupStatus" class="notice-bar" style="display:none;"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" onclick="closeModal('backupModal')">Đóng</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Settings Modal -->
   <div class="modal-backdrop" id="settingsModal">
     <div class="modal" style="max-width:520px;">
@@ -896,6 +941,14 @@
       const el = document.getElementById("edTestStatus");
       const btn = document.getElementById("edTestBtn");
       if (btn) { btn.disabled = false; btn.textContent = "Test Connection"; }
+      if (!el) return;
+      el.className = "notice-bar " + (ok ? "notice-ok" : "notice-err");
+      el.textContent = (ok ? "✓ " : "✖ ") + msg;
+      el.style.display = "flex";
+    };
+
+    window.__onBackupResult = function(ok, msg) {
+      const el = document.getElementById("backupStatus");
       if (!el) return;
       el.className = "notice-bar " + (ok ? "notice-ok" : "notice-err");
       el.textContent = (ok ? "✓ " : "✖ ") + msg;
@@ -1350,6 +1403,46 @@
         openEditProfile(m.profile_id);
       };
       document.getElementById("conflictModal").classList.add("open");
+    }
+
+    function openBackupModal() {
+      document.getElementById("expPass").value = "";
+      document.getElementById("expPass2").value = "";
+      document.getElementById("impPass").value = "";
+      document.getElementById("backupStatus").style.display = "none";
+      document.getElementById("backupModal").classList.add("open");
+    }
+
+    function doExport() {
+      const p1 = document.getElementById("expPass").value;
+      const p2 = document.getElementById("expPass2").value;
+      const el = document.getElementById("backupStatus");
+      if (!p1) {
+        el.className = "notice-bar notice-err";
+        el.textContent = "✖ Vui lòng nhập mật khẩu bảo vệ file.";
+        el.style.display = "flex";
+        return;
+      }
+      if (p1 !== p2) {
+        el.className = "notice-bar notice-err";
+        el.textContent = "✖ Mật khẩu xác nhận không khớp.";
+        el.style.display = "flex";
+        return;
+      }
+      send({ type: "export_data", password: p1 });
+    }
+
+    function doImport() {
+      const pass = document.getElementById("impPass").value;
+      const el = document.getElementById("backupStatus");
+      if (!pass) {
+        el.className = "notice-bar notice-err";
+        el.textContent = "✖ Vui lòng nhập mật khẩu giải mã.";
+        el.style.display = "flex";
+        return;
+      }
+      const replace_all = document.querySelector('input[name="impMode"]:checked').value === "replace";
+      send({ type: "import_data", password: pass, replace_all });
     }
 
     function openSettings() {

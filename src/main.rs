@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod backup;
 mod launcher;
 mod models;
 mod port_guard;
@@ -235,6 +236,13 @@ enum IpcMsg {
         sftp_app: SftpAppKind,
     },
     DownloadTools,
+    ExportData {
+        password: String,
+    },
+    ImportData {
+        password: String,
+        replace_all: bool,
+    },
     DismissConflict,
 }
 
@@ -762,6 +770,98 @@ impl BackendState {
                     let res = download_bundled_tools().map_err(|e| e.to_string());
                     let _ = proxy.send_event(AppEvent::ToolsDownloaded(res));
                 });
+            }
+            IpcMsg::ExportData { password } => {
+                if let Some(path) = rfd::FileDialog::new()
+                    .set_file_name("multi-ssh-backup.mssh")
+                    .add_filter("Multi-SSH Backup", &["mssh", "json"])
+                    .save_file()
+                {
+                    let res = backup::export_to_file(
+                        &path,
+                        &self.store.profiles,
+                        &self.settings,
+                        &password,
+                    );
+                    let (ok, msg) = match res {
+                        Ok(()) => (
+                            true,
+                            format!(
+                                "Đã xuất {} profile (mã hoá AES-256) ra {}",
+                                self.store.profiles.len(),
+                                path.display()
+                            ),
+                        ),
+                        Err(e) => (false, e.to_string()),
+                    };
+                    let js = format!(
+                        "window.__onBackupResult({}, {});",
+                        ok,
+                        serde_json::to_string(&msg).unwrap_or_default()
+                    );
+                    let _ = webview.evaluate_script(&js);
+                }
+                return;
+            }
+            IpcMsg::ImportData {
+                password,
+                replace_all,
+            } => {
+                if let Some(path) = rfd::FileDialog::new()
+                    .add_filter("Multi-SSH Backup", &["mssh", "json"])
+                    .pick_file()
+                {
+                    match backup::import_from_file(&path, &password) {
+                        Ok(payload) => {
+                            let imported_count = payload.profiles.len();
+                            if replace_all {
+                                for s in self.sessions.values() {
+                                    let _ = s.cmd_tx.send(SessionCommand::Disconnect);
+                                }
+                                self.sessions.clear();
+                                self.tab_order.clear();
+                                self.store.profiles = payload.profiles;
+                            } else {
+                                for p in payload.profiles {
+                                    if let Some(existing) =
+                                        self.store.profiles.iter_mut().find(|x| x.id == p.id)
+                                    {
+                                        *existing = p;
+                                    } else {
+                                        self.store.profiles.push(p);
+                                    }
+                                }
+                            }
+                            let _ = self.store.save();
+                            self.settings = payload.settings;
+                            let _ = self.settings.save();
+                            self.overlaps = check_saved_overlaps(&self.store.profiles);
+                            if self.selected_id.is_none() {
+                                self.selected_id = self.store.profiles.first().map(|p| p.id);
+                            }
+                            let msg = format!(
+                                "Đã nhập thành công {} profile từ {}",
+                                imported_count,
+                                path.display()
+                            );
+                            let js = format!(
+                                "window.__onBackupResult(true, {});",
+                                serde_json::to_string(&msg).unwrap_or_default()
+                            );
+                            let _ = webview.evaluate_script(&js);
+                        }
+                        Err(e) => {
+                            let js = format!(
+                                "window.__onBackupResult(false, {});",
+                                serde_json::to_string(&e.to_string()).unwrap_or_default()
+                            );
+                            let _ = webview.evaluate_script(&js);
+                            return;
+                        }
+                    }
+                } else {
+                    return;
+                }
             }
             IpcMsg::DismissConflict => {
                 self.conflict_modal = None;
