@@ -1,0 +1,1408 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Multi-SSH Connect</title>
+  <style>
+    :root {
+      --bg-app: #f8fafc;
+      --bg-surface: #ffffff;
+      --bg-subtle: #f1f5f9;
+      --bg-hover: #f1f5f9;
+      --bg-input: #ffffff;
+      --border: #e2e8f0;
+      --border-strong: #cbd5e1;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --text-faint: #94a3b8;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --ok: #059669;
+      --ok-bg: #ecfdf5;
+      --warn: #d97706;
+      --warn-bg: #fffbeb;
+      --err: #dc2626;
+      --err-bg: #fef2f2;
+      --info: #0284c7;
+      --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+      --shadow-md: 0 4px 16px rgba(15, 23, 42, 0.08);
+      --radius: 10px;
+      --radius-sm: 7px;
+    }
+
+    html.dark {
+      --bg-app: #0f172a;
+      --bg-surface: #1e293b;
+      --bg-subtle: #283548;
+      --bg-hover: #283548;
+      --bg-input: #0f172a;
+      --border: #334155;
+      --border-strong: #475569;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --text-faint: #64748b;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --ok: #34d399;
+      --ok-bg: rgba(16, 185, 129, 0.12);
+      --warn: #fbbf24;
+      --warn-bg: rgba(245, 158, 11, 0.12);
+      --err: #f87171;
+      --err-bg: rgba(239, 68, 68, 0.12);
+      --info: #38bdf8;
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
+      --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-app);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      font-size: 13px;
+      -webkit-font-smoothing: antialiased;
+      user-select: none;
+    }
+    code, .mono { font-family: "Consolas", "Cascadia Code", monospace; }
+
+    /* Topbar */
+    .topbar {
+      height: 54px;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .brand-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 7px;
+      background: var(--primary);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .brand-title {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    .pill-stat {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      padding: 3px 10px;
+      border-radius: 999px;
+    }
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      height: 32px;
+      padding: 0 12px;
+      border-radius: var(--radius-sm);
+      font-family: inherit;
+      font-size: 12.5px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid var(--border-strong);
+      background: var(--bg-surface);
+      color: var(--text);
+      transition: all 0.14s ease;
+      white-space: nowrap;
+    }
+    .btn:hover { background: var(--bg-hover); }
+    .btn-sm { height: 27px; padding: 0 9px; font-size: 12px; }
+    .btn-primary {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+    }
+    .btn-primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+    .btn-ok {
+      background: var(--ok);
+      border-color: var(--ok);
+      color: #fff;
+    }
+    .btn-ok:hover { filter: brightness(0.92); }
+    .btn-danger {
+      background: var(--err-bg);
+      border-color: rgba(220, 38, 38, 0.3);
+      color: var(--err);
+    }
+    .btn-danger:hover { background: var(--err); color: #fff; }
+    .btn-ghost {
+      border-color: transparent;
+      background: transparent;
+      color: var(--text-muted);
+    }
+    .btn-ghost:hover { background: var(--bg-subtle); color: var(--text); }
+
+    /* Main Shell */
+    .shell {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 296px;
+      flex-shrink: 0;
+      background: var(--bg-surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 14px;
+      gap: 10px;
+    }
+    .sidebar-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+    .search-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .search-wrap svg {
+      position: absolute;
+      left: 10px;
+      color: var(--text-faint);
+      pointer-events: none;
+    }
+    .input {
+      width: 100%;
+      height: 34px;
+      padding: 0 10px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-strong);
+      background: var(--bg-input);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 12.5px;
+      outline: none;
+      transition: border-color 0.14s ease, box-shadow 0.14s ease;
+    }
+    .input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    }
+    .search-input { padding-left: 32px; }
+
+    .profile-list {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      padding-right: 2px;
+    }
+    .profile-card {
+      border: 1px solid var(--border);
+      background: var(--bg-surface);
+      border-radius: var(--radius);
+      padding: 10px 11px;
+      cursor: pointer;
+      transition: all 0.14s ease;
+      position: relative;
+    }
+    .profile-card:hover {
+      border-color: var(--border-strong);
+      background: var(--bg-subtle);
+    }
+    .profile-card.selected {
+      background: var(--bg-subtle);
+      border-color: var(--primary);
+      box-shadow: var(--shadow-sm);
+    }
+    .profile-card-top {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+    .profile-meta { flex: 1; min-width: 0; }
+    .profile-title-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .profile-name {
+      font-weight: 600;
+      font-size: 13px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .env-badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      flex-shrink: 0;
+    }
+    .profile-endpoint {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .profile-card-bottom {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 8px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .status-dot {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--text-faint);
+    }
+    .dot.ok { background: var(--ok); }
+    .dot.warn { background: var(--warn); }
+    .dot.err { background: var(--err); }
+
+    .overlap-tag {
+      color: var(--warn);
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    /* Workspace */
+    .workspace {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      padding: 18px 22px;
+      gap: 14px;
+      overflow-y: auto;
+    }
+
+    .tabs-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 6px 10px;
+      overflow-x: auto;
+      flex-shrink: 0;
+    }
+    .session-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg-app);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      transition: all 0.12s ease;
+    }
+    .session-tab.active {
+      background: var(--bg-surface);
+      border-color: var(--primary);
+      box-shadow: var(--shadow-sm);
+    }
+    .tab-close {
+      border: none;
+      background: transparent;
+      color: var(--text-faint);
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      padding: 0 2px;
+    }
+    .tab-close:hover { color: var(--err); }
+
+    /* Cards */
+    .card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+      padding: 18px 20px;
+    }
+    .identity-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .identity-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .color-bar {
+      width: 5px;
+      height: 44px;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+    .identity-name {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    .identity-sub {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .identity-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .launcher-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+
+    .notice-bar {
+      margin-top: 12px;
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .notice-ok { background: var(--ok-bg); color: var(--ok); }
+    .notice-err { background: var(--err-bg); color: var(--err); }
+    .notice-warn { background: var(--warn-bg); color: var(--warn); border: 1px solid rgba(217, 119, 6, 0.25); }
+
+    /* Table */
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .section-title { font-size: 14px; font-weight: 600; }
+    .section-sub { font-size: 12px; color: var(--text-muted); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th {
+      text-align: left;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 10px;
+      border-bottom: 1px solid var(--border);
+      font-size: 12.5px;
+      vertical-align: middle;
+    }
+    tr:last-child td { border-bottom: none; }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11.5px;
+      font-weight: 500;
+    }
+    .status-listening { background: var(--ok-bg); color: var(--ok); }
+    .status-starting { background: var(--warn-bg); color: var(--warn); }
+    .status-stopped { background: var(--bg-subtle); color: var(--text-muted); }
+    .status-error { background: var(--err-bg); color: var(--err); }
+
+    .quick-add {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+
+    /* Empty State */
+    .empty-wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .empty-card {
+      width: 100%;
+      max-width: 460px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: var(--shadow-md);
+      padding: 32px;
+      text-align: center;
+    }
+    .empty-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: rgba(37, 99, 235, 0.1);
+      color: var(--primary);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 14px;
+    }
+    .empty-title { font-size: 19px; font-weight: 600; margin-bottom: 6px; }
+    .empty-desc { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; }
+    .feature-list {
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 24px;
+      padding: 14px;
+      background: var(--bg-subtle);
+      border-radius: var(--radius);
+    }
+    .feature-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12.5px;
+    }
+    .feature-item svg { color: var(--primary); flex-shrink: 0; }
+
+    /* Modal */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.45);
+      backdrop-filter: blur(2px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 20px;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      width: 100%;
+      max-width: 600px;
+      max-height: 88vh;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: var(--shadow-md);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .modal-head {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .modal-body {
+      padding: 18px 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .modal-foot {
+      padding: 12px 20px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      background: var(--bg-subtle);
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .field { display: flex; flex-direction: column; gap: 5px; }
+    .field label { font-size: 11.5px; font-weight: 600; color: var(--text-muted); }
+    .swatch-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .swatch {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: transform 0.1s ease;
+    }
+    .swatch:hover { transform: scale(1.08); }
+    .swatch.active { border-color: var(--text); box-shadow: 0 0 0 2px var(--bg-surface) inset; }
+    .preset-row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .rule-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px;
+      background: var(--bg-subtle);
+      border-radius: 7px;
+      border: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+      </div>
+      <span class="brand-title">Multi-SSH Connect</span>
+      <span class="pill-stat" id="topStats">0 profile · 0 tunnel đang chạy</span>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn" id="dlToolsTopBtn" style="display:none; border-color:var(--warn); color:var(--warn);" onclick="send({type:'download_tools'})">
+        Tải Alacritty + WinSCP
+      </button>
+      <button class="btn" onclick="openSettings()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        Cài đặt
+      </button>
+      <button class="btn" id="themeBtn" onclick="send({type:'toggle_theme'})">
+        Chế độ Tối
+      </button>
+      <button class="btn btn-primary" onclick="openNewProfile()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        Tạo Profile
+      </button>
+    </div>
+  </header>
+
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="sidebar-label">Danh sách Profile</div>
+      <div class="search-wrap">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <input class="input search-input" id="searchInput" placeholder="Tìm tên, host, nhãn..." oninput="renderAll()" />
+      </div>
+      <div class="profile-list" id="profileList"></div>
+    </aside>
+
+    <main class="workspace" id="workspace"></main>
+  </div>
+
+  <!-- Profile Editor Modal -->
+  <div class="modal-backdrop" id="editorModal">
+    <div class="modal">
+      <div class="modal-head">
+        <span id="editorTitle">Tạo SSH Profile Mới</span>
+        <button class="btn btn-ghost btn-sm" onclick="closeModal('editorModal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="field">
+            <label>Tên Profile</label>
+            <input class="input" id="edName" placeholder="vd: Main Production DB" />
+          </div>
+          <div class="field">
+            <label>Nhãn môi trường</label>
+            <input class="input" id="edBadge" placeholder="PROD / STAGING / DEV" />
+          </div>
+        </div>
+        <div class="preset-row">
+          <button class="btn btn-sm" onclick="document.getElementById('edBadge').value='PROD'">PROD</button>
+          <button class="btn btn-sm" onclick="document.getElementById('edBadge').value='STAGING'">STAGING</button>
+          <button class="btn btn-sm" onclick="document.getElementById('edBadge').value='DEV'">DEV</button>
+          <button class="btn btn-sm" onclick="document.getElementById('edBadge').value='DB'">DB</button>
+          <button class="btn btn-sm" onclick="document.getElementById('edBadge').value='PROXY'">PROXY</button>
+        </div>
+        <div class="field">
+          <label>Màu phân biệt</label>
+          <div class="swatch-row" id="edSwatches"></div>
+        </div>
+        <div class="form-grid">
+          <div class="field">
+            <label>Host / IP</label>
+            <input class="input" id="edHost" placeholder="192.168.1.10" />
+          </div>
+          <div class="form-grid">
+            <div class="field">
+              <label>Port</label>
+              <input class="input" id="edPort" type="number" value="22" />
+            </div>
+            <div class="field">
+              <label>Username</label>
+              <input class="input" id="edUser" placeholder="root" />
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Phương thức xác thực</label>
+          <div style="display:flex; gap:14px; align-items:center;">
+            <label style="display:flex; align-items:center; gap:5px; font-weight:500; color:var(--text);">
+              <input type="radio" name="edAuthType" value="password" checked onchange="toggleAuthFields()" /> Mật khẩu
+            </label>
+            <label style="display:flex; align-items:center; gap:5px; font-weight:500; color:var(--text);">
+              <input type="radio" name="edAuthType" value="key" onchange="toggleAuthFields()" /> SSH Private Key
+            </label>
+          </div>
+        </div>
+        <div id="edPassWrap" class="field">
+          <label>Mật khẩu</label>
+          <input class="input" id="edPass" type="password" placeholder="••••••••" />
+        </div>
+        <div id="edKeyWrap" style="display:none; flex-direction:column; gap:10px;">
+          <div class="field">
+            <label>Đường dẫn Private Key</label>
+            <div style="display:flex; gap:8px;">
+              <input class="input" id="edKeyPath" placeholder="C:\Users\...\.ssh\id_ed25519" />
+              <button class="btn" onclick="send({type:'pick_key_file'})">Chọn file...</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Passphrase (tuỳ chọn)</label>
+            <input class="input" id="edPassphrase" type="password" placeholder="Để trống nếu không có" />
+          </div>
+        </div>
+        <div class="field">
+          <label>Thư mục SFTP mặc định</label>
+          <input class="input" id="edRemotePath" placeholder=". hoặc /var/www" />
+        </div>
+        <div class="field">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <label>Port Forwarding (-L)</label>
+            <button class="btn btn-sm" onclick="addEditorRule()">+ Thêm rule</button>
+          </div>
+          <div id="edRulesList" style="display:flex; flex-direction:column; gap:6px; margin-top:4px;"></div>
+        </div>
+        <div id="edError" class="notice-bar notice-err" style="display:none;"></div>
+        <div id="edTestStatus" class="notice-bar" style="display:none;"></div>
+      </div>
+      <div class="modal-foot" style="justify-content:space-between;">
+        <button class="btn" id="edTestBtn" onclick="testDraftConnection()">Test Connection</button>
+        <div style="display:flex; gap:8px;">
+          <button class="btn" onclick="closeModal('editorModal')">Huỷ</button>
+          <button class="btn btn-primary" onclick="saveEditor()">Lưu Profile</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Conflict Modal -->
+  <div class="modal-backdrop" id="conflictModal">
+    <div class="modal" style="max-width:520px;">
+      <div class="modal-head">
+        <span id="conflictTitle">Phát hiện xung đột Port Forwarding</span>
+        <button class="btn btn-ghost btn-sm" onclick="closeModal('conflictModal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <p id="conflictDesc" style="font-size:13px; color:var(--text);"></p>
+        <div id="conflictList" class="notice-bar notice-warn" style="flex-direction:column; align-items:flex-start;"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" onclick="closeModal('conflictModal')">Đóng</button>
+        <button class="btn" id="conflictEditBtn">Sửa Profile</button>
+        <button class="btn btn-primary" id="conflictSkipBtn">Bật Tunnel (bỏ qua port trùng)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal-backdrop" id="settingsModal">
+    <div class="modal" style="max-width:520px;">
+      <div class="modal-head">
+        <span>Cài đặt Terminal & SFTP (bên thứ 3)</span>
+        <button class="btn btn-ghost btn-sm" onclick="closeModal('settingsModal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label>Bộ công cụ chuẩn Portable (thư mục riêng <code id="toolsDirLabel">tools/</code>)</label>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px; background:var(--bg-subtle); border-radius:7px; border:1px solid var(--border);">
+            <div id="toolsStatusText" style="font-size:12px;"></div>
+            <button class="btn btn-sm btn-primary" onclick="send({type:'download_tools'})">Tải / Cập nhật bộ công cụ</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Ứng dụng Terminal</label>
+          <select class="input" id="setTermKind" onchange="toggleCustomInputs()">
+            <option value="Auto">Tự động (ưu tiên Alacritty trong tools/ → Windows Terminal → PowerShell)</option>
+            <option value="Alacritty">Alacritty (Portable trong tools/)</option>
+            <option value="WindowsTerminal">Windows Terminal (wt.exe - hỗ trợ tab màu riêng)</option>
+            <option value="PowerShell">PowerShell + OpenSSH</option>
+            <option value="Custom">Lệnh tùy chỉnh ({host}, {port}, {user}, {key}, {title})</option>
+          </select>
+          <input class="input" id="setTermCustom" style="display:none; margin-top:6px;" placeholder="putty.exe -ssh {user}@{host} -P {port}" />
+        </div>
+        <div class="field">
+          <label>Ứng dụng SFTP</label>
+          <select class="input" id="setSftpKind" onchange="toggleCustomInputs()">
+            <option value="Auto">Tự động (WinSCP → FileZilla → OpenSSH SFTP)</option>
+            <option value="WinSCP">WinSCP</option>
+            <option value="FileZilla">FileZilla</option>
+            <option value="OpenSshSftp">OpenSSH SFTP (PowerShell)</option>
+            <option value="Custom">Lệnh tùy chỉnh ({url}, {host}, {port}, {user})</option>
+          </select>
+          <input class="input" id="setSftpCustom" style="display:none; margin-top:6px;" placeholder="filezilla.exe {url}" />
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" onclick="closeModal('settingsModal')">Đóng</button>
+        <button class="btn btn-primary" onclick="saveSettings()">Lưu cài đặt</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const PALETTE = [
+      { r: 56, g: 189, b: 248 },
+      { r: 52, g: 211, b: 153 },
+      { r: 251, g: 191, b: 36 },
+      { r: 251, g: 113, b: 133 },
+      { r: 167, g: 139, b: 250 },
+      { r: 45, g: 212, b: 191 },
+      { r: 251, g: 146, b: 60 },
+      { r: 129, g: 140, b: 248 },
+    ];
+
+    let APP_STATE = {
+      profiles: [],
+      sessions: {},
+      tab_order: [],
+      selected_id: null,
+      overlaps: {},
+      settings: { theme_light: true, terminal_app: "Auto", sftp_app: "Auto" },
+      detected_terminal: "PowerShell",
+      detected_sftp: "OpenSshSftp",
+      notice: null,
+      conflict_modal: null,
+    };
+
+    let EDITOR_STATE = null;
+
+    function send(payload) {
+      window.ipc.postMessage(JSON.stringify(payload));
+    }
+
+    function rgbHex(c) {
+      return "#" + [c.r, c.g, c.b].map(v => v.toString(16).padStart(2, "0")).join("");
+    }
+
+    function rgbaStr(c, a) {
+      return `rgba(${c.r}, ${c.g}, ${c.b}, ${a})`;
+    }
+
+    function esc(s) {
+      return String(s ?? "").replace(/[&<>"']/g, m => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[m]));
+    }
+
+    function fmtBytes(b) {
+      if (b >= 1073741824) return (b / 1073741824).toFixed(2) + " GB";
+      if (b >= 1048576) return (b / 1048576).toFixed(1) + " MB";
+      if (b >= 1024) return (b / 1024).toFixed(1) + " KB";
+      return b + " B";
+    }
+
+    function monogram(name) {
+      const parts = (name || "").trim().split(/\s+/).filter(Boolean);
+      if (!parts.length) return "SS";
+      return parts.slice(0, 2).map(w => w[0]).join("").toUpperCase();
+    }
+
+    window.__onState = function(state) {
+      APP_STATE = state;
+      document.documentElement.classList.toggle("dark", !state.settings.theme_light);
+      document.getElementById("themeBtn").textContent = state.settings.theme_light ? "Chế độ Tối" : "Chế độ Sáng";
+      renderAll();
+      if (state.conflict_modal) {
+        showConflictModal(state.conflict_modal);
+      }
+    };
+
+    window.__onKeyFilePicked = function(path) {
+      const el = document.getElementById("edKeyPath");
+      if (el) el.value = path;
+    };
+
+    window.__onDraftTestResult = function(ok, msg) {
+      const el = document.getElementById("edTestStatus");
+      const btn = document.getElementById("edTestBtn");
+      if (btn) { btn.disabled = false; btn.textContent = "Test Connection"; }
+      if (!el) return;
+      el.className = "notice-bar " + (ok ? "notice-ok" : "notice-err");
+      el.textContent = (ok ? "✓ " : "✖ ") + msg;
+      el.style.display = "flex";
+    };
+
+    function renderAll() {
+      const activeCount = Object.values(APP_STATE.sessions).filter(
+        s => s.status === "Connected" || s.status === "Connecting"
+      ).length;
+      document.getElementById("topStats").textContent =
+        `${APP_STATE.profiles.length} profile · ${activeCount} tunnel đang chạy`;
+
+      const dlBtn = document.getElementById("dlToolsTopBtn");
+      if (dlBtn) {
+        const missing = !APP_STATE.tools_alacritty_ok || !APP_STATE.tools_winscp_ok;
+        dlBtn.style.display = missing ? "inline-flex" : "none";
+      }
+
+      renderSidebar();
+      renderWorkspace();
+    }
+
+    function renderSidebar() {
+      const q = (document.getElementById("searchInput").value || "").trim().toLowerCase();
+      const list = document.getElementById("profileList");
+      const items = APP_STATE.profiles.filter(p =>
+        !q ||
+        p.name.toLowerCase().includes(q) ||
+        p.host.toLowerCase().includes(q) ||
+        p.env_badge.toLowerCase().includes(q) ||
+        p.username.toLowerCase().includes(q)
+      );
+
+      if (!items.length) {
+        list.innerHTML = `<div style="padding:20px; text-align:center; color:var(--text-muted); font-size:12px;">Chưa có profile nào</div>`;
+        return;
+      }
+
+      list.innerHTML = items.map(p => {
+        const sess = APP_STATE.sessions[p.id];
+        const isSelected = APP_STATE.selected_id === p.id;
+        const hex = rgbHex(p.color);
+        const ov = APP_STATE.overlaps[p.id] || [];
+        const fwCount = (p.port_forwards || []).filter(r => r.enabled).length;
+        const isRunning = sess && (sess.status === "Connected" || sess.status === "Connecting");
+        let dotCls = "", statusTxt = "Sẵn sàng";
+        if (sess) {
+          if (sess.status === "Connected") { dotCls = "ok"; statusTxt = "LIVE"; }
+          else if (sess.status === "Connecting") { dotCls = "warn"; statusTxt = "Đang bật..."; }
+          else if (sess.status.startsWith("Error")) { dotCls = "err"; statusTxt = "Lỗi"; }
+        }
+
+        return `
+          <div class="profile-card ${isSelected ? "selected" : ""}" onclick="send({type:'select_profile', id:'${p.id}'})">
+            <div class="profile-card-top">
+              <div class="avatar" style="background:${rgbaStr(p.color, 0.14)}; color:${hex}; border:1px solid ${rgbaStr(p.color, 0.45)};">
+                ${esc(monogram(p.name))}
+              </div>
+              <div class="profile-meta">
+                <div class="profile-title-row">
+                  <span class="env-badge" style="background:${rgbaStr(p.color, 0.14)}; color:${hex};">${esc(p.env_badge || "SSH")}</span>
+                  <span class="profile-name">${esc(p.name)}</span>
+                </div>
+                <div class="profile-endpoint mono">${esc(p.username)}@${esc(p.host)}:${p.port}</div>
+              </div>
+            </div>
+            <div class="profile-card-bottom">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span class="status-dot"><span class="dot ${dotCls}"></span>${statusTxt}</span>
+                ${fwCount > 0 ? `<span>· ${fwCount} port</span>` : ""}
+                ${ov.length ? `<span class="overlap-tag" title="${esc(ov.map(o => o.desc).join('\n'))}">⚠ Trùng port</span>` : ""}
+              </div>
+              <div onclick="event.stopPropagation()">
+                ${isRunning
+                  ? `<button class="btn btn-sm btn-danger" onclick="send({type:'disconnect', id:'${p.id}'})">Ngắt</button>`
+                  : `<button class="btn btn-sm btn-ok" onclick="send({type:'connect', id:'${p.id}'})">Bật Live</button>`
+                }
+              </div>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderWorkspace() {
+      const ws = document.getElementById("workspace");
+      let html = "";
+
+      if (APP_STATE.tab_order.length > 0) {
+        html += `<div class="tabs-bar"><span style="font-size:11.5px; color:var(--text-muted); margin-right:4px;">Đang chạy:</span>`;
+        for (const id of APP_STATE.tab_order) {
+          const s = APP_STATE.sessions[id];
+          if (!s) continue;
+          const p = s.profile;
+          const hex = rgbHex(p.color);
+          const isAct = APP_STATE.selected_id === id;
+          const dotCls = s.status === "Connected" ? "ok" : s.status === "Connecting" ? "warn" : s.status.startsWith("Error") ? "err" : "";
+          html += `
+            <div class="session-tab ${isAct ? "active" : ""}" onclick="send({type:'select_profile', id:'${id}'})">
+              <span class="dot ${dotCls}"></span>
+              <span class="env-badge" style="background:${rgbaStr(p.color, 0.14)}; color:${hex};">${esc(p.env_badge || "SSH")}</span>
+              <span>${esc(p.name)}</span>
+              <button class="tab-close" title="Đóng & ngắt tunnel" onclick="event.stopPropagation(); send({type:'close_tab', id:'${id}'})">×</button>
+            </div>
+          `;
+        }
+        html += `</div>`;
+      }
+
+      const profile = APP_STATE.profiles.find(p => p.id === APP_STATE.selected_id);
+      if (!profile) {
+        ws.innerHTML = html + `
+          <div class="empty-wrap">
+            <div class="empty-card">
+              <div class="empty-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+              </div>
+              <div class="empty-title">Multi-SSH Connect</div>
+              <div class="empty-desc">Quản lý nhiều SSH profile song song, không cần reload lại cấu hình</div>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path></svg>
+                  <span>Phân biệt rõ ràng từng server bằng <b>Màu sắc & Nhãn</b></span>
+                </div>
+                <div class="feature-item">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line></svg>
+                  <span>Mở nhanh <b>Terminal & SFTP bên thứ 3</b> (Windows Terminal, FileZilla, WinSCP...)</span>
+                </div>
+                <div class="feature-item">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                  <span>Tự động <b>cảnh báo & chặn xung đột Port</b> khi chạy song song</span>
+                </div>
+              </div>
+              <button class="btn btn-primary" style="height:36px; padding:0 18px;" onclick="openNewProfile()">
+                + Tạo Profile Đầu Tiên
+              </button>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      const hex = rgbHex(profile.color);
+      const sess = APP_STATE.sessions[profile.id];
+      const isRunning = sess && (sess.status === "Connected" || sess.status === "Connecting");
+      const ov = APP_STATE.overlaps[profile.id] || [];
+
+      html += `
+        <div class="card">
+          <div class="identity-header">
+            <div class="identity-left">
+              <div class="color-bar" style="background:${hex};"></div>
+              <div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span class="env-badge" style="background:${rgbaStr(profile.color, 0.14)}; color:${hex};">${esc(profile.env_badge || "SSH")}</span>
+                  <span class="identity-name">${esc(profile.name)}</span>
+                </div>
+                <div class="identity-sub mono">${esc(profile.username)}@${esc(profile.host)}:${profile.port}</div>
+              </div>
+            </div>
+            <div class="identity-actions">
+              ${isRunning
+                ? `<button class="btn btn-danger" onclick="send({type:'disconnect', id:'${profile.id}'})">Ngắt Live</button>`
+                : `<button class="btn btn-ok" onclick="send({type:'connect', id:'${profile.id}'})">Bật Live Profile</button>`
+              }
+              <button class="btn" onclick="openEditProfile('${profile.id}')">Sửa</button>
+              <button class="btn" onclick="send({type:'duplicate_profile', id:'${profile.id}'})">Nhân bản</button>
+              <button class="btn btn-danger" onclick="if(confirm('Xoá profile ${esc(profile.name)}?')) send({type:'delete_profile', id:'${profile.id}'})">Xoá</button>
+            </div>
+          </div>
+
+          ${sess && sess.status.startsWith("Error") ? `<div class="notice-bar notice-err">${esc(sess.status)}</div>` : ""}
+
+          <div class="launcher-row">
+            <button class="btn btn-primary" onclick="send({type:'launch_terminal', id:'${profile.id}'})">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+              Mở Terminal (${esc(APP_STATE.detected_terminal)})
+            </button>
+            <button class="btn" style="border-color:var(--info); color:var(--info);" onclick="send({type:'launch_sftp', id:'${profile.id}'})">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+              Mở SFTP (${esc(APP_STATE.detected_sftp)})
+            </button>
+            <button class="btn" onclick="send({type:'test_connection', id:'${profile.id}'})">
+              Test Connection
+            </button>
+            <button class="btn" onclick="send({type:'copy_ssh', id:'${profile.id}'})">
+              Copy lệnh SSH
+            </button>
+          </div>
+
+          ${APP_STATE.notice ? `<div class="notice-bar ${APP_STATE.notice.is_error ? "notice-err" : "notice-ok"}">${esc(APP_STATE.notice.message)}</div>` : ""}
+        </div>
+      `;
+
+      if (ov.length > 0) {
+        html += `<div class="notice-bar notice-warn" style="flex-direction:column; align-items:flex-start;">
+          ${ov.map(o => `<div>⚠ ${esc(o.desc)}</div>`).join("")}
+        </div>`;
+      }
+
+      // Port Forwarding Card
+      html += `<div class="card">
+        <div class="section-head">
+          <div>
+            <div class="section-title">Port Forwarding (-L)</div>
+            <div class="section-sub">Tự động kiểm tra và chặn xung đột port giữa các profile đang chạy</div>
+          </div>
+        </div>`;
+
+      if (sess) {
+        const fwList = Object.values(sess.forwards).sort((a, b) => a.rule.local_port - b.rule.local_port);
+        if (!fwList.length) {
+          html += `<div style="color:var(--text-muted); padding:8px 0;">Profile này chưa có rule Port Forward nào.</div>`;
+        } else {
+          html += `<table><thead><tr><th>Nhãn</th><th>Định tuyến</th><th>Trạng thái</th><th>Lưu lượng</th><th style="text-align:right;">Điều khiển</th></tr></thead><tbody>`;
+          for (const fw of fwList) {
+            const st = fw.status;
+            let pill = `<span class="status-pill status-stopped">○ Đã dừng</span>`;
+            const active = st === "Listening" || st === "Starting";
+            if (st === "Listening") pill = `<span class="status-pill status-listening">● Listening (${fw.active_conns}/${fw.total_conns})</span>`;
+            else if (st === "Starting") pill = `<span class="status-pill status-starting">● Đang mở...</span>`;
+            else if (st.startsWith("Error")) pill = `<span class="status-pill status-error">✖ ${esc(st)}</span>`;
+
+            html += `<tr>
+              <td><b>${esc(fw.rule.label || "Forward")}</b></td>
+              <td class="mono">${esc(fw.rule.bind_address || "127.0.0.1")}:${fw.rule.local_port} → ${esc(fw.rule.remote_host)}:${fw.rule.remote_port}</td>
+              <td>${pill}</td>
+              <td class="mono" style="color:var(--text-muted);">↑ ${fmtBytes(fw.bytes_tx)}  ↓ ${fmtBytes(fw.bytes_rx)}</td>
+              <td style="text-align:right;">
+                ${active
+                  ? `<button class="btn btn-sm btn-danger" onclick="send({type:'toggle_forward', profile_id:'${profile.id}', rule_id:'${fw.rule.id}', enable:false})">Dừng</button>`
+                  : `<button class="btn btn-sm btn-ok" onclick="send({type:'toggle_forward', profile_id:'${profile.id}', rule_id:'${fw.rule.id}', enable:true})">Bật</button>`
+                }
+              </td>
+            </tr>`;
+          }
+          html += `</tbody></table>`;
+        }
+        html += `
+          <div class="quick-add">
+            <input class="input" id="qLabel" placeholder="Nhãn (MySQL)" style="width:120px;" />
+            <input class="input mono" id="qBind" value="127.0.0.1" style="width:105px;" />
+            <span>:</span>
+            <input class="input mono" id="qLPort" type="number" placeholder="Local" style="width:82px;" />
+            <span>→</span>
+            <input class="input mono" id="qRHost" value="127.0.0.1" style="width:110px;" />
+            <span>:</span>
+            <input class="input mono" id="qRPort" type="number" placeholder="Remote" style="width:82px;" />
+            <button class="btn btn-primary" onclick="addQuickForward('${profile.id}')">+ Bật nhanh</button>
+          </div>
+        `;
+      } else {
+        const rules = profile.port_forwards || [];
+        if (!rules.length) {
+          html += `<div style="color:var(--text-muted); padding:6px 0;">Chưa cấu hình Port Forward nào. Nhấn <b>Sửa</b> để thêm.</div>`;
+        } else {
+          html += `<table><thead><tr><th>Nhãn</th><th>Định tuyến</th><th>Trạng thái</th></tr></thead><tbody>`;
+          for (const r of rules) {
+            html += `<tr>
+              <td><b>${esc(r.label)}</b></td>
+              <td class="mono">${esc(r.bind_address || "127.0.0.1")}:${r.local_port} → ${esc(r.remote_host)}:${r.remote_port}</td>
+              <td style="color:var(--text-muted);">${r.enabled ? "Sẽ mở khi Bật Tunnel" : "Đang tắt"}</td>
+            </tr>`;
+          }
+          html += `</tbody></table>`;
+        }
+      }
+
+      html += `</div>`;
+      ws.innerHTML = html;
+    }
+
+    function addQuickForward(profileId) {
+      const lp = parseInt(document.getElementById("qLPort").value, 10);
+      const rp = parseInt(document.getElementById("qRPort").value, 10);
+      if (!lp || !rp) return;
+      send({
+        type: "add_quick_forward",
+        profile_id: profileId,
+        label: document.getElementById("qLabel").value.trim() || `Port ${lp}`,
+        bind_address: document.getElementById("qBind").value.trim() || "127.0.0.1",
+        local_port: lp,
+        remote_host: document.getElementById("qRHost").value.trim() || "127.0.0.1",
+        remote_port: rp,
+      });
+    }
+
+    // Editor Modal
+    function openNewProfile() {
+      EDITOR_STATE = {
+        id: null,
+        name: "New Server",
+        env_badge: "DEV",
+        color: PALETTE[0],
+        host: "127.0.0.1",
+        port: 22,
+        username: "root",
+        auth: { Password: { password: "" } },
+        initial_remote_path: ".",
+        port_forwards: [],
+      };
+      populateEditor("Tạo SSH Profile Mới");
+    }
+
+    function openEditProfile(id) {
+      const p = APP_STATE.profiles.find(x => x.id === id);
+      if (!p) return;
+      EDITOR_STATE = JSON.parse(JSON.stringify(p));
+      populateEditor("Chỉnh sửa SSH Profile");
+    }
+
+    function populateEditor(title) {
+      document.getElementById("editorTitle").textContent = title;
+      document.getElementById("edName").value = EDITOR_STATE.name;
+      document.getElementById("edBadge").value = EDITOR_STATE.env_badge;
+      document.getElementById("edHost").value = EDITOR_STATE.host;
+      document.getElementById("edPort").value = EDITOR_STATE.port;
+      document.getElementById("edUser").value = EDITOR_STATE.username;
+      document.getElementById("edRemotePath").value = EDITOR_STATE.initial_remote_path || ".";
+      document.getElementById("edError").style.display = "none";
+      document.getElementById("edTestStatus").style.display = "none";
+
+      const isPass = !!EDITOR_STATE.auth.Password;
+      document.querySelector(`input[name="edAuthType"][value="${isPass ? "password" : "key"}"]`).checked = true;
+      document.getElementById("edPass").value = isPass ? EDITOR_STATE.auth.Password.password : "";
+      document.getElementById("edKeyPath").value = !isPass ? EDITOR_STATE.auth.PrivateKey.key_path : "";
+      document.getElementById("edPassphrase").value = !isPass ? (EDITOR_STATE.auth.PrivateKey.passphrase || "") : "";
+      toggleAuthFields();
+      renderSwatches();
+      renderEditorRules();
+      document.getElementById("editorModal").classList.add("open");
+    }
+
+    function toggleAuthFields() {
+      const isPass = document.querySelector('input[name="edAuthType"]:checked').value === "password";
+      document.getElementById("edPassWrap").style.display = isPass ? "flex" : "none";
+      document.getElementById("edKeyWrap").style.display = isPass ? "none" : "flex";
+    }
+
+    function renderSwatches() {
+      document.getElementById("edSwatches").innerHTML = PALETTE.map((c, idx) => {
+        const active = c.r === EDITOR_STATE.color.r && c.g === EDITOR_STATE.color.g && c.b === EDITOR_STATE.color.b;
+        return `<div class="swatch ${active ? "active" : ""}" style="background:${rgbHex(c)};" onclick="EDITOR_STATE.color=PALETTE[${idx}]; renderSwatches();"></div>`;
+      }).join("");
+    }
+
+    function renderEditorRules() {
+      const el = document.getElementById("edRulesList");
+      if (!EDITOR_STATE.port_forwards.length) {
+        el.innerHTML = `<div style="font-size:12px; color:var(--text-muted);">Chưa có rule nào</div>`;
+        return;
+      }
+      el.innerHTML = EDITOR_STATE.port_forwards.map((r, i) => `
+        <div class="rule-row">
+          <input type="checkbox" ${r.enabled ? "checked" : ""} onchange="EDITOR_STATE.port_forwards[${i}].enabled=this.checked" />
+          <input class="input" style="width:90px; height:28px;" value="${esc(r.label)}" placeholder="Nhãn" oninput="EDITOR_STATE.port_forwards[${i}].label=this.value" />
+          <input class="input mono" style="width:90px; height:28px;" value="${esc(r.bind_address)}" placeholder="127.0.0.1" oninput="EDITOR_STATE.port_forwards[${i}].bind_address=this.value" />
+          <span>:</span>
+          <input class="input mono" type="number" style="width:68px; height:28px;" value="${r.local_port}" oninput="EDITOR_STATE.port_forwards[${i}].local_port=parseInt(this.value)||0" />
+          <span>→</span>
+          <input class="input mono" style="width:95px; height:28px;" value="${esc(r.remote_host)}" placeholder="127.0.0.1" oninput="EDITOR_STATE.port_forwards[${i}].remote_host=this.value" />
+          <span>:</span>
+          <input class="input mono" type="number" style="width:68px; height:28px;" value="${r.remote_port}" oninput="EDITOR_STATE.port_forwards[${i}].remote_port=parseInt(this.value)||0" />
+          <button class="btn btn-sm btn-danger" onclick="EDITOR_STATE.port_forwards.splice(${i},1); renderEditorRules();">✕</button>
+        </div>
+      `).join("");
+    }
+
+    function addEditorRule() {
+      EDITOR_STATE.port_forwards.push({
+        id: null,
+        enabled: true,
+        label: "Service",
+        bind_address: "127.0.0.1",
+        local_port: 8080,
+        remote_host: "127.0.0.1",
+        remote_port: 80,
+      });
+      renderEditorRules();
+    }
+
+    function collectEditorProfile() {
+      const name = document.getElementById("edName").value.trim();
+      const host = document.getElementById("edHost").value.trim();
+      const port = parseInt(document.getElementById("edPort").value, 10);
+      const errEl = document.getElementById("edError");
+      if (!name || !host) {
+        errEl.textContent = "Tên profile và Host không được để trống.";
+        errEl.style.display = "flex";
+        return null;
+      }
+      if (!port || port < 1 || port > 65535) {
+        errEl.textContent = "Port SSH phải từ 1 đến 65535.";
+        errEl.style.display = "flex";
+        return null;
+      }
+      errEl.style.display = "none";
+      const isPass = document.querySelector('input[name="edAuthType"]:checked').value === "password";
+      const passPhrase = document.getElementById("edPassphrase").value;
+      return {
+        id: EDITOR_STATE.id,
+        name,
+        env_badge: document.getElementById("edBadge").value.trim() || "DEV",
+        color: EDITOR_STATE.color,
+        host,
+        port,
+        username: document.getElementById("edUser").value.trim() || "root",
+        auth: isPass
+          ? { Password: { password: document.getElementById("edPass").value } }
+          : { PrivateKey: { key_path: document.getElementById("edKeyPath").value.trim(), passphrase: passPhrase || null } },
+        initial_remote_path: document.getElementById("edRemotePath").value.trim() || ".",
+        port_forwards: EDITOR_STATE.port_forwards,
+        notes: "",
+      };
+    }
+
+    function testDraftConnection() {
+      const profile = collectEditorProfile();
+      if (!profile) return;
+      const btn = document.getElementById("edTestBtn");
+      const st = document.getElementById("edTestStatus");
+      btn.disabled = true;
+      btn.textContent = "Đang kiểm tra...";
+      st.className = "notice-bar notice-warn";
+      st.textContent = `Đang thử kết nối SSH tới ${profile.host}:${profile.port}...`;
+      st.style.display = "flex";
+      send({ type: "test_draft_connection", profile });
+    }
+
+    function saveEditor() {
+      const profile = collectEditorProfile();
+      if (!profile) return;
+      send({ type: "save_profile", profile });
+      closeModal("editorModal");
+    }
+
+    function showConflictModal(m) {
+      document.getElementById("conflictTitle").textContent = m.title;
+      document.getElementById("conflictDesc").textContent =
+        `Profile [${m.profile_env}] ${m.profile_name} không thể mở các port sau do bị trùng hoặc đang bị chiếm dụng:`;
+      document.getElementById("conflictList").innerHTML =
+        m.conflicts.map(c => `<div>⛔ ${esc(c.desc)}</div>`).join("");
+      const skipBtn = document.getElementById("conflictSkipBtn");
+      skipBtn.style.display = m.allow_skip ? "inline-flex" : "none";
+      skipBtn.onclick = () => {
+        send({ type: "connect_skip_conflicts", id: m.profile_id, bad_rule_ids: m.conflicts.map(c => c.rule_id) });
+        closeModal("conflictModal");
+      };
+      document.getElementById("conflictEditBtn").onclick = () => {
+        closeModal("conflictModal");
+        openEditProfile(m.profile_id);
+      };
+      document.getElementById("conflictModal").classList.add("open");
+    }
+
+    function openSettings() {
+      const t = APP_STATE.settings.terminal_app;
+      const s = APP_STATE.settings.sftp_app;
+      const dirEl = document.getElementById("toolsDirLabel");
+      if (dirEl && APP_STATE.tools_dir) dirEl.textContent = APP_STATE.tools_dir;
+      const stEl = document.getElementById("toolsStatusText");
+      if (stEl) {
+        const ala = APP_STATE.tools_alacritty_ok ? "✓ Alacritty" : "✗ Chưa có Alacritty";
+        const wsc = APP_STATE.tools_winscp_ok ? "✓ WinSCP" : "✗ Chưa có WinSCP";
+        stEl.textContent = `${ala}  ·  ${wsc}`;
+      }
+      if (typeof t === "string") {
+        document.getElementById("setTermKind").value = t;
+      } else {
+        document.getElementById("setTermKind").value = "Custom";
+        document.getElementById("setTermCustom").value = t.Custom || "";
+      }
+      if (typeof s === "string") {
+        document.getElementById("setSftpKind").value = s;
+      } else {
+        document.getElementById("setSftpKind").value = "Custom";
+        document.getElementById("setSftpCustom").value = s.Custom || "";
+      }
+      toggleCustomInputs();
+      document.getElementById("settingsModal").classList.add("open");
+    }
+
+    function toggleCustomInputs() {
+      document.getElementById("setTermCustom").style.display =
+        document.getElementById("setTermKind").value === "Custom" ? "block" : "none";
+      document.getElementById("setSftpCustom").style.display =
+        document.getElementById("setSftpKind").value === "Custom" ? "block" : "none";
+    }
+
+    function saveSettings() {
+      const tk = document.getElementById("setTermKind").value;
+      const sk = document.getElementById("setSftpKind").value;
+      const terminal_app = tk === "Custom" ? { Custom: document.getElementById("setTermCustom").value } : tk;
+      const sftp_app = sk === "Custom" ? { Custom: document.getElementById("setSftpCustom").value } : sk;
+      send({ type: "save_settings", terminal_app, sftp_app });
+      closeModal("settingsModal");
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.remove("open");
+      if (id === "conflictModal") {
+        send({ type: "dismiss_conflict" });
+      }
+    }
+
+    window.addEventListener("DOMContentLoaded", () => send({ type: "init" }));
+  </script>
+</body>
+</html>
